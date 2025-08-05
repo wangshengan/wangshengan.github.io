@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工作时间统计表</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: white;
+            color: black;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .month-section {
+            margin-bottom: 30px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            background-color: white;
+        }
+        .month-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+            color: black;
+        }
+        .month-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: black;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+            background-color: white;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+            color: black;
+        }
+        th {
+            background-color: #f2f2f2;
+            color: black;
+        }
+        input {
+            padding: 5px;
+            background-color: white;
+            color: black;
+            border: 1px solid #ddd;
+        }
+        .date-input {
+            width: 80px;
+        }
+        .time-input {
+            width: 80px;
+        }
+        button {
+            padding: 8px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        .summary {
+            margin-top: 20px;
+            font-weight: bold;
+            color: black;
+        }
+        .config {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: white;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        .month-summary {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: white;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            color: black;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 style="color: black;">工作时间统计表</h1>
+        
+        <div class="config">
+            <h3 style="color: black;">配置规则</h3>
+            <div>
+                <label style="color: black;">标准上班时间: </label>
+                <input type="time" id="standard-start" value="09:00">
+                <label style="color: black;">标准下班时间: </label>
+                <input type="time" id="standard-end" value="18:30">
+            </div>
+            <div>
+                <label style="color: black;">午休开始时间: </label>
+                <input type="time" id="lunch-start" value="12:00">
+                <label style="color: black;">午休结束时间: </label>
+                <input type="time" id="lunch-end" value="13:00">
+            </div>
+            <button onclick="updateConfig()">更新配置</button>
+        </div>
+
+        <div id="month-sections">
+            <!-- 月份区块将通过JavaScript动态添加 -->
+        </div>
+
+        <button onclick="addMonthSection()">添加月份</button>
+        <button onclick="calculateTotal()">计算总计</button>
+        
+        <div class="summary" id="summary">
+            总计: 工作时间 0 小时 | 请假时间 0 小时 | 加班时间 0 小时 | 缺勤天数 0 天
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh.js"></script>
+    <script>
+        // 配置参数
+        let config = {
+            standardStart: '09:00',
+            standardEnd: '18:30',
+            lunchStart: '12:00',
+            lunchEnd: '13:00'
+        };
+
+        // 获取某个月的总天数
+        function getDaysInMonth(year, month) {
+            return new Date(year, month, 0).getDate();
+        }
+
+        // 更新配置
+        function updateConfig() {
+            config.standardStart = document.getElementById('standard-start').value;
+            config.standardEnd = document.getElementById('standard-end').value;
+            config.lunchStart = document.getElementById('lunch-start').value;
+            config.lunchEnd = document.getElementById('lunch-end').value;
+            calculateAllRows();
+        }
+
+        // 添加新月份区块
+        function addMonthSection(year = null, month = null) {
+            const today = new Date();
+            const currentYear = year || today.getFullYear();
+            const currentMonth = month || today.getMonth() + 1;
+            
+            const monthSection = document.createElement('div');
+            monthSection.className = 'month-section';
+            monthSection.dataset.year = currentYear;
+            monthSection.dataset.month = currentMonth;
+            monthSection.dataset.nextDay = 1; // 初始化从1号开始
+            
+            monthSection.innerHTML = `
+                <div class="month-header">
+                    <div class="month-title">
+                        <input type="number" class="year-input" value="${currentYear}" min="2000" max="2100" 
+                            onchange="updateMonthTitle(this)">
+                        <span>年</span>
+                        <input type="number" class="month-input" value="${currentMonth}" min="1" max="12" 
+                            onchange="updateMonthTitle(this)">
+                        <span>月</span>
+                    </div>
+                    <button onclick="addRow(this)">添加记录</button>
+                </div>
+                <table class="time-table">
+                    <thead>
+                        <tr>
+                            <th>日</th>
+                            <th>上班时间</th>
+                            <th>下班时间</th>
+                            <th>工作时间</th>
+                            <th>请假时间</th>
+                            <th>加班时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- 数据行将通过JavaScript动态添加 -->
+                    </tbody>
+                </table>
+                <div class="month-summary">
+                    本月统计: 工作时间 0 小时 | 请假时间 0 小时 | 加班时间 0 小时 | 缺勤天数 0 天
+                </div>
+            `;
+            
+            document.getElementById('month-sections').appendChild(monthSection);
+        }
+
+        // 更新月份标题和日期
+        function updateMonthTitle(input) {
+            const monthHeader = input.closest('.month-header');
+            const monthSection = input.closest('.month-section');
+            
+            const yearInput = monthHeader.querySelector('.year-input');
+            const monthInput = monthHeader.querySelector('.month-input');
+            
+            const newYear = parseInt(yearInput.value);
+            const newMonth = parseInt(monthInput.value);
+            
+            // 更新月份区块的年月数据
+            monthSection.dataset.year = newYear;
+            monthSection.dataset.month = newMonth;
+            
+            // 重置nextDay为1
+            monthSection.dataset.nextDay = 1;
+            
+            // 更新所有日期输入框的值
+            const dateInputs = monthSection.querySelectorAll('.day-input');
+            dateInputs.forEach(input => {
+                const fp = input._flatpickr;
+                if (fp) {
+                    const currentDate = fp.selectedDates[0];
+                    if (currentDate) {
+                        const newDate = new Date(newYear, newMonth - 1, currentDate.getDate());
+                        fp.setDate(newDate);
+                    }
+                }
+            });
+            
+            calculateMonthStats(monthSection);
+        }
+
+        // 添加新行
+        function addRow(button) {
+            const monthSection = button.closest('.month-section');
+            const tbody = monthSection.querySelector('tbody');
+            const newRow = document.createElement('tr');
+            
+            // 获取当前年月
+            const year = parseInt(monthSection.dataset.year);
+            const month = parseInt(monthSection.dataset.month);
+            
+            // 获取下一个日期（从1号开始）
+            let nextDay = parseInt(monthSection.dataset.nextDay || 1);
+            
+            newRow.innerHTML = `
+                <td>
+                    <input type="text" class="day-input" placeholder="选择日期">
+                </td>
+                <td><input type="time" class="start-time time-input"></td>
+                <td><input type="time" class="end-time time-input"></td>
+                <td class="work-hours">0</td>
+                <td class="leave-hours">0</td>
+                <td class="overtime-hours">0</td>
+                <td><button onclick="deleteRow(this)">删除</button></td>
+            `;
+            
+            tbody.appendChild(newRow);
+            
+            // 初始化日期选择器
+            flatpickr(newRow.querySelector('.day-input'), {
+                dateFormat: "d日",
+                locale: "zh",
+                defaultDate: new Date(year, month - 1, nextDay),
+                onChange: function(selectedDates, dateStr, instance) {
+                    calculateRow(instance.input);
+                    calculateMonthStats(monthSection);
+                }
+            });
+            
+            // 更新下一个日期
+            monthSection.dataset.nextDay = nextDay + 1;
+            
+            // 添加事件监听器
+            const inputs = newRow.querySelectorAll('input');
+            inputs.forEach(input => {
+                if (!input.classList.contains('day-input')) {
+                    input.addEventListener('change', function() {
+                        calculateRow(this);
+                        calculateMonthStats(monthSection);
+                    });
+                }
+            });
+        }
+
+        // 删除行
+        function deleteRow(button) {
+            const row = button.parentNode.parentNode;
+            const monthSection = row.closest('.month-section');
+            row.parentNode.removeChild(row);
+            
+            calculateTotal();
+            calculateMonthStats(monthSection);
+        }
+
+        // 计算单行数据
+        function calculateRow(input) {
+            const row = input.closest('tr');
+            const startTime = row.querySelector('.start-time').value;
+            const endTime = row.querySelector('.end-time').value;
+            
+            if (!startTime || !endTime) return;
+            
+            // 将时间字符串转换为分钟数
+            const startMinutes = timeToMinutes(startTime);
+            const endMinutes = timeToMinutes(endTime);
+            
+            // 标准工作时间
+            const standardStart = timeToMinutes(config.standardStart);
+            const standardEnd = timeToMinutes(config.standardEnd);
+            const lunchStart = timeToMinutes(config.lunchStart);
+            const lunchEnd = timeToMinutes(config.lunchEnd);
+            
+            // 计算工作时间
+            let workMinutes = 0;
+            let leaveMinutes = 0;
+            let overtimeMinutes = 0;
+            
+            // 如果上班时间在标准上班时间之前
+            if (startMinutes < standardStart) {
+                workMinutes += Math.min(standardStart, endMinutes) - startMinutes;
+            }
+            
+            // 上午工作时间
+            const morningEnd = Math.min(lunchStart, endMinutes);
+            workMinutes += Math.max(0, morningEnd - Math.max(startMinutes, standardStart));
+            
+            // 下午工作时间
+            const afternoonStart = Math.max(lunchEnd, startMinutes);
+            const afternoonEnd = Math.min(standardEnd, endMinutes);
+            workMinutes += Math.max(0, afternoonEnd - afternoonStart);
+            
+            // 加班时间（标准下班时间之后）
+            if (endMinutes > standardEnd) {
+                overtimeMinutes = endMinutes - Math.max(startMinutes, standardEnd);
+            }
+            
+            // 请假时间 = 标准工作时间 - 实际工作时间
+            const standardWorkMinutes = (standardEnd - standardStart) - (lunchEnd - lunchStart);
+            leaveMinutes = standardWorkMinutes - workMinutes;
+            
+            // 如果实际工作时间超过标准工作时间，则没有请假时间
+            if (leaveMinutes < 0) {
+                leaveMinutes = 0;
+            }
+            
+            // 转换为小时并保留1位小数
+            row.querySelector('.work-hours').textContent = (workMinutes / 60).toFixed(1);
+            row.querySelector('.leave-hours').textContent = (leaveMinutes / 60).toFixed(1);
+            row.querySelector('.overtime-hours').textContent = (overtimeMinutes / 60).toFixed(1);
+        }
+
+        // 计算所有行
+        function calculateAllRows() {
+            const rows = document.querySelectorAll('.time-table tbody tr');
+            rows.forEach(row => {
+                const startInput = row.querySelector('.start-time');
+                const endInput = row.querySelector('.end-time');
+                
+                if (startInput.value && endInput.value) {
+                    const event = { target: startInput };
+                    calculateRow(event);
+                }
+            });
+        }
+
+        // 计算月度统计
+        function calculateMonthStats(monthSection) {
+            let monthWork = 0;
+            let monthLeave = 0;
+            let monthOvertime = 0;
+            let workDays = 0;
+            
+            const rows = monthSection.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                const workHours = parseFloat(row.querySelector('.work-hours').textContent) || 0;
+                const leaveHours = parseFloat(row.querySelector('.leave-hours').textContent) || 0;
+                
+                monthWork += workHours;
+                monthLeave += leaveHours;
+                monthOvertime += parseFloat(row.querySelector('.overtime-hours').textContent) || 0;
+                
+                // 判断是否为工作日（工作时间大于0.5小时）
+                if (workHours > 0.5) {
+                    workDays++;
+                }
+            });
+            
+            // 计算缺勤天数
+            const year = parseInt(monthSection.dataset.year);
+            const month = parseInt(monthSection.dataset.month);
+            const daysInMonth = getDaysInMonth(year, month);
+            const absentDays = daysInMonth - workDays;
+            
+            monthSection.querySelector('.month-summary').textContent = 
+                `${year}年${month}月统计: 工作时间 ${monthWork.toFixed(1)} 小时 | 请假时间 ${monthLeave.toFixed(1)} 小时 | 加班时间 ${monthOvertime.toFixed(1)} 小时 | 缺勤天数 ${absentDays} 天`;
+        }
+
+        // 计算总计
+        function calculateTotal() {
+            let totalWork = 0;
+            let totalLeave = 0;
+            let totalOvertime = 0;
+            let totalAbsent = 0;
+            
+            document.querySelectorAll('.month-section').forEach(section => {
+                const year = parseInt(section.dataset.year);
+                const month = parseInt(section.dataset.month);
+                const daysInMonth = getDaysInMonth(year, month);
+                
+                let workDays = 0;
+                const rows = section.querySelectorAll('tbody tr');
+                rows.forEach(row => {
+                    const workHours = parseFloat(row.querySelector('.work-hours').textContent) || 0;
+                    totalWork += workHours;
+                    totalLeave += parseFloat(row.querySelector('.leave-hours').textContent) || 0;
+                    totalOvertime += parseFloat(row.querySelector('.overtime-hours').textContent) || 0;
+                    
+                    // 判断是否为工作日（工作时间大于0.5小时）
+                    if (workHours > 0.5) {
+                        workDays++;
+                    }
+                });
+                
+                // 计算该月缺勤天数
+                totalAbsent += daysInMonth - workDays;
+            });
+            
+            document.getElementById('summary').textContent = 
+                `总计: 工作时间 ${totalWork.toFixed(1)} 小时 | 请假时间 ${totalLeave.toFixed(1)} 小时 | 加班时间 ${totalOvertime.toFixed(1)} 小时 | 缺勤天数 ${totalAbsent} 天`;
+        }
+
+        // 辅助函数：将时间字符串转换为分钟数
+        function timeToMinutes(timeStr) {
+            if (!timeStr) return 0;
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            return hours * 60 + minutes;
+        }
+
+        // 初始化表格
+        window.onload = function() {
+            // 添加当前月份的区块
+            addMonthSection();
+        };
+    </script>
+</body>
+</html>
